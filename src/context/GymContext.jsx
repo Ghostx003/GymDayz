@@ -206,12 +206,6 @@ export function GymProvider({ children }) {
       return;
     }
 
-    // Check if today is skipped
-    if (dateStr === todayStr && isTodaySkipped) {
-      showToast("Today's attendance is locked because Skip Today is active", 'warning');
-      return;
-    }
-
     updateAndPersist(prev => {
       const currentAttendance = { ...(prev.attendance || {}) };
       const currentGone = countDaysGone(currentAttendance);
@@ -246,43 +240,23 @@ export function GymProvider({ children }) {
         attendance: currentAttendance,
       };
     });
-  }, [subscription.startDate, subscription.endDate, todayStr, isTodaySkipped, currentDay, updateAndPersist, showToast]);
+  }, [subscription.startDate, subscription.endDate, todayStr, currentDay, updateAndPersist, showToast]);
 
-  // Today Actions
+  // Today Actions (Miss = Skip, unified)
   const markTodayAttended = useCallback(() => {
-    if (isTodaySkipped) {
-      showToast("Today is skipped! Unlock 'Skip Today' to mark attendance.", 'warning');
-      return;
-    }
+    if (isCompleted || !hasStarted) return;
     setDateAttendance(todayStr, todayStatus === 'attended' ? 'unmarked' : 'attended');
-  }, [isTodaySkipped, setDateAttendance, todayStr, todayStatus, showToast]);
+  }, [isCompleted, hasStarted, setDateAttendance, todayStr, todayStatus]);
 
   const markTodayMissed = useCallback(() => {
-    if (isTodaySkipped) {
-      showToast("Today is skipped! Unlock 'Skip Today' to mark attendance.", 'warning');
-      return;
-    }
+    if (isCompleted || !hasStarted) return;
     setDateAttendance(todayStr, todayStatus === 'missed' ? 'unmarked' : 'missed');
-  }, [isTodaySkipped, setDateAttendance, todayStr, todayStatus, showToast]);
+  }, [isCompleted, hasStarted, setDateAttendance, todayStr, todayStatus]);
 
   const toggleSkipToday = useCallback(() => {
-    updateAndPersist(prev => {
-      const skipped = new Set(prev.skippedDates || []);
-      let msg = '';
-      if (skipped.has(todayStr)) {
-        skipped.delete(todayStr);
-        msg = "Today unlocked. You can now record today's attendance.";
-      } else {
-        skipped.add(todayStr);
-        msg = "Today skipped and locked from attendance modifications.";
-      }
-      showToast(msg, 'info');
-      return {
-        ...prev,
-        skippedDates: Array.from(skipped),
-      };
-    });
-  }, [todayStr, updateAndPersist, showToast]);
+    // Skip and Miss are unified
+    markTodayMissed();
+  }, [markTodayMissed]);
 
   // Deterministic Counter Increments / Decrements
   const incrementDaysGone = useCallback(() => {

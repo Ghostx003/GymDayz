@@ -1,5 +1,5 @@
 import React from 'react';
-import { Dumbbell, XCircle, Ban, RotateCcw, Check, Sparkles, Lock } from 'lucide-react';
+import { Dumbbell, Check, Ban, Clock, Sparkles } from 'lucide-react';
 import { useGym } from '../../context/GymContext';
 import { formatDisplayDate } from '../../utils/dateUtils';
 
@@ -9,113 +9,105 @@ export default function TodayActionCard() {
     currentDay,
     hasStarted,
     isCompleted,
-    isTodaySkipped,
     todayStatus,
     markTodayAttended,
     markTodayMissed,
-    toggleSkipToday,
   } = useGym();
 
   const isAttended = todayStatus === 'attended';
   const isMissed = todayStatus === 'missed';
 
   return (
-    <div className={`bg-[#111726]/90 border rounded-3xl p-6 shadow-card transition-all relative overflow-hidden ${
-      isTodaySkipped ? 'border-amber-500/40 bg-amber-950/10' : 'border-slate-800/80'
+    <div className={`bg-[#111726]/90 border rounded-3xl p-5 sm:p-6 shadow-card transition-all relative overflow-hidden ${
+      isAttended
+        ? 'border-emerald-500/40 bg-emerald-950/10'
+        : isMissed
+        ? 'border-rose-500/30 bg-rose-950/10'
+        : 'border-slate-800/80'
     }`}>
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 shadow-sm">
-            <Dumbbell className="w-4 h-4 stroke-[2.5]" />
+      {/* Top Header */}
+      <div className="flex items-center justify-between gap-3 mb-5">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 shadow-md shadow-emerald-500/20 shrink-0">
+            <Dumbbell className="w-5 h-5 stroke-[2.5]" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-              TODAY'S WORKOUT
+            <div className="flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-black text-white tracking-tight">
+                TODAY'S WORKOUT
+              </h3>
               {currentDay > 0 && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-emerald-400 font-semibold border border-slate-700">
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-bold border border-emerald-500/30">
                   DAY {currentDay}
                 </span>
               )}
-            </h3>
-            <span className="text-xs text-slate-400">
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5 font-medium">
               {formatDisplayDate(todayStr, 'full')}
-            </span>
+            </p>
           </div>
         </div>
 
-        {/* Skip status badge */}
-        {isTodaySkipped && (
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold self-start sm:self-auto">
-            <Lock className="w-3.5 h-3.5" />
-            <span>Today Locked (Skipped)</span>
-          </div>
-        )}
+        {/* Status Pill Badge */}
+        <div>
+          {isAttended ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold">
+              <Check className="w-3.5 h-3.5 stroke-[3]" />
+              <span>Attended</span>
+            </span>
+          ) : isMissed ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-bold">
+              <Ban className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Skipped</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-slate-400 text-xs font-medium">
+              <Clock className="w-3.5 h-3.5" />
+              <span>Not Logged</span>
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Main Buttons */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {/* GO TO GYM BUTTON */}
+      {/* 2 Clean Symmetrical Action Buttons (Miss = Skip unified, no duplicate ticks) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        {/* ATTENDED BUTTON */}
         <button
           onClick={markTodayAttended}
-          disabled={isTodaySkipped || isCompleted || !hasStarted}
-          className={`py-3.5 px-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 ${
+          disabled={isCompleted || !hasStarted}
+          className={`py-3.5 px-5 rounded-2xl font-bold text-sm sm:text-base flex items-center justify-center gap-2.5 transition-all shadow-md active:scale-[0.98] select-none ${
             isAttended
-              ? 'bg-emerald-500 text-slate-950 shadow-emerald-500/25 ring-2 ring-emerald-400'
-              : 'bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300'
-          } ${isTodaySkipped || isCompleted || !hasStarted ? 'opacity-40 cursor-not-allowed' : ''}`}
+              ? 'bg-emerald-500 text-slate-950 shadow-emerald-500/25 ring-2 ring-emerald-400 font-black'
+              : 'bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 hover:text-emerald-200'
+          } ${isCompleted || !hasStarted ? 'opacity-40 cursor-not-allowed' : ''}`}
         >
-          <Check className="w-4 h-4 stroke-[3]" />
-          <span>{isAttended ? 'Attended Today ✓' : 'Go To Gym'}</span>
+          <Check className={`w-5 h-5 stroke-[2.5] ${isAttended ? 'text-slate-950' : 'text-emerald-400'}`} />
+          <span>{isAttended ? 'Attended Today' : 'Went to Gym'}</span>
         </button>
 
-        {/* MISS TODAY BUTTON */}
+        {/* SKIP / MISS BUTTON */}
         <button
           onClick={markTodayMissed}
-          disabled={isTodaySkipped || isCompleted || !hasStarted}
-          className={`py-3.5 px-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 ${
+          disabled={isCompleted || !hasStarted}
+          className={`py-3.5 px-5 rounded-2xl font-bold text-sm sm:text-base flex items-center justify-center gap-2.5 transition-all shadow-md active:scale-[0.98] select-none ${
             isMissed
-              ? 'bg-rose-500 text-white shadow-rose-500/25 ring-2 ring-rose-400'
-              : 'bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300'
-          } ${isTodaySkipped || isCompleted || !hasStarted ? 'opacity-40 cursor-not-allowed' : ''}`}
+              ? 'bg-rose-500 text-white shadow-rose-500/25 ring-2 ring-rose-400 font-black'
+              : 'bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 hover:text-rose-200'
+          } ${isCompleted || !hasStarted ? 'opacity-40 cursor-not-allowed' : ''}`}
         >
-          <XCircle className="w-4 h-4 stroke-[2.5]" />
-          <span>{isMissed ? 'Missed Today ✕' : 'Miss Today'}</span>
-        </button>
-
-        {/* SKIP TODAY / UNDO SKIP BUTTON */}
-        <button
-          onClick={toggleSkipToday}
-          className={`py-3.5 px-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 ${
-            isTodaySkipped
-              ? 'bg-amber-500 text-slate-950 shadow-amber-500/25'
-              : 'bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300'
-          }`}
-        >
-          {isTodaySkipped ? (
-            <>
-              <RotateCcw className="w-4 h-4" />
-              <span>Undo Skip</span>
-            </>
-          ) : (
-            <>
-              <Ban className="w-4 h-4" />
-              <span>Skip Today</span>
-            </>
-          )}
+          <Ban className={`w-5 h-5 stroke-[2.5] ${isMissed ? 'text-white' : 'text-rose-400'}`} />
+          <span>{isMissed ? 'Skipped Today' : 'Skip / Miss Today'}</span>
         </button>
       </div>
 
-      {/* Helper text */}
-      <div className="mt-3 text-center sm:text-left">
-        <p className="text-[11px] text-slate-500 leading-normal">
-          {isTodaySkipped
-            ? 'Today is locked from attendance modifications. Click "Undo Skip" anytime to enable workout logging.'
-            : isAttended
-            ? 'Great job working out today! Click again anytime to toggle or adjust.'
+      {/* Helper Context Subtext */}
+      <div className="mt-3.5 text-center sm:text-left">
+        <p className="text-xs text-slate-400 leading-relaxed font-medium">
+          {isAttended
+            ? 'Workout logged for today! Tap again if you need to undo.'
             : isMissed
-            ? 'Today marked as missed. Rest up and crush it tomorrow!'
-            : 'Tap "Go To Gym" after completing your workout, or "Skip Today" for planned rest days.'}
+            ? 'Rest day logged for today. Tap again if you need to undo.'
+            : 'Did you hit the gym today? Tap to record workout or mark as a skipped/rest day.'}
         </p>
       </div>
     </div>

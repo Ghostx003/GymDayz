@@ -242,14 +242,7 @@ export default function AttendanceCalendar() {
             <span className="w-3.5 h-3.5 rounded-md bg-rose-500/20 border border-rose-500/50 flex items-center justify-center text-rose-400">
               <X className="w-2.5 h-2.5 stroke-[3]" />
             </span>
-            <span>Missed</span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <span className="w-3.5 h-3.5 rounded-md bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400">
-              <Lock className="w-2.5 h-2.5" />
-            </span>
-            <span>Skipped</span>
+            <span>Missed / Skipped</span>
           </div>
 
           <div className="flex items-center gap-1.5">
