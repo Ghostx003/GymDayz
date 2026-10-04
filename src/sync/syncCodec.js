@@ -1,40 +1,57 @@
 /**
- * Compact Sync Payload Codec for Gym Dayz
- * Serializes and deserializes application state to fit efficiently into QR codes.
+ * Ultra-Compact Sync Payload Codec for Gym Dayz
+ * Optimizes payload size so QR codes have huge, chunky blocks
+ * that any phone camera can scan in under 1-2 seconds.
  */
+import { diffInCalendarDays, addCalendarDays } from '../utils/dateUtils';
 
-const SYNC_HEADER = 'GYMDAYZ:v1:';
+const SYNC_PREFIX = 'GD1:'; // Ultra-short magic header
 
 /**
- * Encodes gym data into a compact QR sync string
+ * Encodes gym data into an ultra-compact string for instant QR scanning
  * @param {object} data 
  * @returns {string}
  */
 export function encodeSyncPayload(data) {
   try {
-    // Compress attendance into compact mapping: 1 for attended, 0 for missed
-    const compactAttendance = {};
-    if (data.attendance) {
-      for (const [date, status] of Object.entries(data.attendance)) {
-        compactAttendance[date] = status === 'attended' ? 1 : 0;
+    const startDate = data.subscription?.startDate || '';
+    const endDate = data.subscription?.endDate || '';
+    const attendance = data.attendance || {};
+
+    // Generate ultra-short sequence for attendance:
+    // '1' = attended, '0' = missed, '.' = unmarked
+    let seq = '';
+    if (startDate && endDate) {
+      const total = Math.min(1000, diffInCalendarDays(endDate, startDate) + 1);
+      for (let i = 0; i < total; i++) {
+        const d = addCalendarDays(startDate, i);
+        const status = attendance[d];
+        if (status === 'attended') {
+          seq += '1';
+        } else if (status === 'missed') {
+          seq += '0';
+        } else {
+          seq += '.';
+        }
       }
+      // Trim trailing unmarked days
+      seq = seq.replace(/\.+$/, '');
     }
 
-    const payload = {
+    // Ultra-compact JSON object with single-letter keys
+    const compact = {
       p: data.profile?.name || '',
       f: data.subscription?.feesPaid || 0,
-      s: data.subscription?.startDate || '',
-      e: data.subscription?.endDate || '',
-      a: compactAttendance,
-      k: data.skippedDates || [],
-      t: data.metadata?.lastUpdatedAt || new Date().toISOString(),
-      d: data.metadata?.updatedBy || 'pc',
+      s: startDate,
+      e: endDate,
+      b: seq, // bitstring: '1' = attended, '0' = missed
+      t: data.metadata?.lastUpdatedAt ? new Date(data.metadata.lastUpdatedAt).getTime() : Date.now(),
     };
 
-    const jsonStr = JSON.stringify(payload);
-    // Encode to base64 for safe string representation
-    const base64 = btoa(unescape(encodeURIComponent(jsonStr)));
-    return `${SYNC_HEADER}${base64}`;
+    const jsonStr = JSON.stringify(compact);
+    // Base64 encoding
+    const b64 = btoa(unescape(encodeURIComponent(jsonStr)));
+    return `${SYNC_PREFIX}${b64}`;
   } catch (err) {
     console.error('Failed to encode sync payload:', err);
     throw new Error('Could not generate sync payload');
@@ -42,7 +59,7 @@ export function encodeSyncPayload(data) {
 }
 
 /**
- * Decodes and validates a QR sync string into full Gym Dayz state
+ * Decodes sync string (supports both ultra-compact GD1: and legacy GYMDAYZ: formats)
  * @param {string} syncString 
  * @returns {object}
  */
@@ -52,20 +69,27 @@ export function decodeSyncPayload(syncString) {
   }
 
   let jsonStr = '';
-  if (syncString.startsWith(SYNC_HEADER)) {
-    const rawBase64 = syncString.slice(SYNC_HEADER.length);
+  if (syncString.startsWith(SYNC_PREFIX)) {
+    const raw = syncString.slice(SYNC_PREFIX.length);
     try {
-      jsonStr = decodeURIComponent(escape(atob(rawBase64)));
+      jsonStr = decodeURIComponent(escape(atob(raw)));
+    } catch {
+      throw new Error('Invalid QR code format: corrupt base64');
+    }
+  } else if (syncString.startsWith('GYMDAYZ:v1:')) {
+    const raw = syncString.slice('GYMDAYZ:v1:'.length);
+    try {
+      jsonStr = decodeURIComponent(escape(atob(raw)));
     } catch {
       throw new Error('Invalid QR code format: corrupt base64');
     }
   } else {
-    // Check if direct JSON string (for manual copy/paste fallback)
+    // Try raw JSON for manual copy-paste
     try {
       JSON.parse(syncString);
       jsonStr = syncString;
     } catch {
-      throw new Error('Invalid sync code format. Must start with GYMDAYZ:');
+      throw new Error('Invalid sync code format');
     }
   }
 
@@ -76,43 +100,53 @@ export function decodeSyncPayload(syncString) {
     throw new Error('Invalid sync data: malformed JSON content');
   }
 
-  // Support both full JSON and compressed format
-  const isCompressed = 'p' in payload || 's' in payload;
+  const name = payload.p || payload.profile?.name || 'Athlete';
+  const feesPaid = Number(payload.f ?? payload.subscription?.feesPaid ?? 0);
+  const startDate = payload.s || payload.subscription?.startDate || '';
+  const endDate = payload.e || payload.subscription?.endDate || '';
+  const lastUpdatedAt = typeof payload.t === 'number'
+    ? new Date(payload.t).toISOString()
+    : payload.t || payload.metadata?.lastUpdatedAt || new Date().toISOString();
 
-  const name = isCompressed ? payload.p : payload.profile?.name;
-  const feesPaid = Number(isCompressed ? payload.f : payload.subscription?.feesPaid);
-  const startDate = isCompressed ? payload.s : payload.subscription?.startDate;
-  const endDate = isCompressed ? payload.e : payload.subscription?.endDate;
-  const skippedDates = (isCompressed ? payload.k : payload.skippedDates) || [];
-  const lastUpdatedAt = isCompressed ? payload.t : payload.metadata?.lastUpdatedAt;
-  const updatedBy = isCompressed ? payload.d : payload.metadata?.updatedBy;
-
-  // Reconstitute attendance
-  const rawAttendance = isCompressed ? payload.a : payload.attendance;
   const attendance = {};
-  if (rawAttendance && typeof rawAttendance === 'object') {
-    for (const [date, val] of Object.entries(rawAttendance)) {
+
+  // If ultra-compact bitstring format 'b' was used
+  if (typeof payload.b === 'string' && startDate) {
+    for (let i = 0; i < payload.b.length; i++) {
+      const char = payload.b[i];
+      const d = addCalendarDays(startDate, i);
+      if (char === '1') {
+        attendance[d] = 'attended';
+      } else if (char === '0') {
+        attendance[d] = 'missed';
+      }
+    }
+  } else if (payload.a && typeof payload.a === 'object') {
+    // Legacy dictionary format
+    for (const [date, val] of Object.entries(payload.a)) {
       if (val === 1 || val === 'attended') {
         attendance[date] = 'attended';
       } else if (val === 0 || val === 'missed') {
         attendance[date] = 'missed';
       }
     }
+  } else if (payload.attendance && typeof payload.attendance === 'object') {
+    Object.assign(attendance, payload.attendance);
   }
 
   return {
     version: 1,
-    profile: { name: name || 'User' },
+    profile: { name },
     subscription: {
-      feesPaid: Math.max(0, feesPaid || 0),
-      startDate: startDate || '',
-      endDate: endDate || '',
+      feesPaid: Math.max(0, feesPaid),
+      startDate,
+      endDate,
     },
     attendance,
-    skippedDates: Array.isArray(skippedDates) ? skippedDates : [],
+    skippedDates: [],
     metadata: {
-      lastUpdatedAt: lastUpdatedAt || new Date().toISOString(),
-      updatedBy: updatedBy || 'device',
+      lastUpdatedAt,
+      updatedBy: payload.d || 'sync',
     },
   };
 }

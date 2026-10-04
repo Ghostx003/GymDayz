@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { Camera, AlertCircle, RefreshCw, X } from 'lucide-react';
+import { Camera, AlertCircle, Zap } from 'lucide-react';
 
-export default function QrScannerModal({ onScanSuccess, onError }) {
+export default function QrScannerModal({ onScanSuccess }) {
   const [cameraError, setCameraError] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const scannerRef = useRef(null);
@@ -14,14 +14,22 @@ export default function QrScannerModal({ onScanSuccess, onError }) {
     async function startScanner() {
       try {
         setCameraError('');
-        const html5QrCode = new Html5Qrcode(containerId);
+        const html5QrCode = new Html5Qrcode(containerId, {
+          experimentalFeatures: {
+            useBarCodeDetectorIfSupported: true, // Native Android/Chrome hardware acceleration
+          },
+          verbose: false,
+        });
         scannerRef.current = html5QrCode;
 
         await html5QrCode.start(
           { facingMode: 'environment' },
           {
-            fps: 10,
-            qrbox: { width: 250, height: 250 },
+            fps: 25, // High scanning frame rate for sub-second recognition
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+              const edge = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.85);
+              return { width: edge, height: edge };
+            },
             aspectRatio: 1.0,
           },
           (decodedText) => {
@@ -34,7 +42,7 @@ export default function QrScannerModal({ onScanSuccess, onError }) {
             }
           },
           () => {
-            // Frame scanned without QR match
+            // Frame scanned
           }
         );
 
@@ -45,9 +53,9 @@ export default function QrScannerModal({ onScanSuccess, onError }) {
         if (isMounted) {
           const errStr = err?.toString() || '';
           if (errStr.includes('NotAllowedError') || errStr.includes('Permission')) {
-            setCameraError('Camera permission denied. Please allow camera access in your browser settings, or use the manual Sync Code input below.');
+            setCameraError('Camera permission denied. Please allow camera access in your browser settings, or use the "Paste Code" tab.');
           } else {
-            setCameraError('Unable to access camera or no camera detected. You can paste the Sync Code manually below.');
+            setCameraError('Unable to access camera feed. You can use the "Paste Code" tab to sync manually.');
           }
         }
       }
@@ -63,36 +71,37 @@ export default function QrScannerModal({ onScanSuccess, onError }) {
             scannerRef.current.stop().catch(() => {});
           }
         } catch {
-          // ignore cleanup errors
+          // ignore
         }
       }
     };
   }, [onScanSuccess]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {cameraError ? (
         <div className="p-4 rounded-2xl bg-amber-950/50 border border-amber-500/40 text-amber-200 text-xs sm:text-sm flex items-start gap-3">
           <AlertCircle className="w-5 h-5 shrink-0 text-amber-400 mt-0.5" />
           <div className="leading-relaxed">
-            <span className="font-bold block mb-1">Camera Access Issue</span>
+            <span className="font-bold block mb-1">Camera Notice</span>
             <span>{cameraError}</span>
           </div>
         </div>
       ) : (
-        <div className="relative rounded-2xl overflow-hidden bg-slate-950 border border-slate-800">
-          <div id="gym-qr-reader" className="w-full min-h-[280px]" />
+        <div className="relative rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-inner">
+          <div id="gym-qr-reader" className="w-full min-h-[260px]" />
           {!isScanning && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 text-slate-400 gap-2">
               <Camera className="w-8 h-8 animate-pulse text-emerald-400" />
-              <span className="text-xs">Initializing camera feed...</span>
+              <span className="text-xs font-semibold">Starting camera...</span>
             </div>
           )}
         </div>
       )}
 
-      <p className="text-center text-xs text-slate-400">
-        Point your phone camera at the QR code displayed on the other device.
+      <p className="text-center text-xs text-slate-400 flex items-center justify-center gap-1.5">
+        <Zap className="w-3.5 h-3.5 text-emerald-400" />
+        <span>Align QR code inside box — captures automatically in 1–2 seconds.</span>
       </p>
     </div>
   );
