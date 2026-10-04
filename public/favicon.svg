@@ -1,19 +1,36 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
   <defs>
-    <linearGradient id="gymGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="dbGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#10b981" />
       <stop offset="50%" stop-color="#06b6d4" />
       <stop offset="100%" stop-color="#3b82f6" />
     </linearGradient>
+    <linearGradient id="barGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#94a3b8" />
+      <stop offset="50%" stop-color="#f8fafc" />
+      <stop offset="100%" stop-color="#94a3b8" />
+    </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="128" fill="#090d16" />
-  <rect x="16" y="16" width="480" height="480" rx="112" stroke="#1e293b" stroke-width="8" />
-  <g transform="translate(256, 256) rotate(-45) translate(-256, -256)">
-    <rect x="136" y="240" width="240" height="32" rx="16" fill="#f8fafc" />
-    <rect x="220" y="236" width="72" height="40" rx="8" fill="url(#gymGrad)" />
-    <rect x="96" y="196" width="40" height="120" rx="14" fill="url(#gymGrad)" />
-    <rect x="64" y="216" width="32" height="80" rx="10" fill="#10b981" />
-    <rect x="376" y="196" width="40" height="120" rx="14" fill="url(#gymGrad)" />
-    <rect x="416" y="216" width="32" height="80" rx="10" fill="#10b981" />
+
+  <!-- Background rounded squircle for crisp contrast in light and dark browser tabs -->
+  <rect width="64" height="64" rx="16" fill="#090d16" />
+
+  <!-- Dumbbell Icon angled 45 degrees for dynamic fitness stance -->
+  <g transform="translate(32, 32) rotate(-45) translate(-32, -32)">
+    <!-- Center Barbell Shaft -->
+    <rect x="18" y="28" width="28" height="8" rx="4" fill="url(#barGrad)" />
+
+    <!-- Center Grip Knurling -->
+    <rect x="27" y="27" width="10" height="10" rx="2" fill="url(#dbGrad)" />
+
+    <!-- Left Outer Weight Plate -->
+    <rect x="6" y="20" width="6" height="24" rx="3" fill="#10b981" />
+    <!-- Left Inner Weight Plate -->
+    <rect x="13" y="16" width="7" height="32" rx="3.5" fill="url(#dbGrad)" />
+
+    <!-- Right Inner Weight Plate -->
+    <rect x="44" y="16" width="7" height="32" rx="3.5" fill="url(#dbGrad)" />
+    <!-- Right Outer Weight Plate -->
+    <rect x="52" y="20" width="6" height="24" rx="3" fill="#10b981" />
   </g>
 </svg>
