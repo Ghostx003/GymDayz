@@ -1,5 +1,5 @@
 import React from 'react';
-import { Dumbbell, QrCode, Calendar, BarChart3, Settings, LayoutDashboard, Ticket } from 'lucide-react';
+import { Dumbbell, QrCode, Calendar, BarChart3, Settings, LayoutDashboard } from 'lucide-react';
 import { useGym } from '../../context/GymContext';
 
 export default function Navbar({ activeTab, setActiveTab, onOpenSync, onOpenPass }) {
@@ -15,44 +15,29 @@ export default function Navbar({ activeTab, setActiveTab, onOpenSync, onOpenPass
   return (
     <header className="sticky top-0 z-40 w-full bg-[#090d16]/90 backdrop-blur-md border-b border-slate-800/80">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-        {/* Brand / Gym Pass Trigger */}
-        <div 
-          onClick={onOpenPass}
-          className="flex items-center gap-3 cursor-pointer group select-none"
-          title="Click to view Gym Entry Barcode & Member Pass"
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              onOpenPass?.();
-            }
-          }}
-        >
-          <div className="relative w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20 group-hover:scale-105 group-hover:shadow-emerald-500/40 transition-all">
+        {/* Brand & Dumbbell Icon */}
+        <div className="flex items-center gap-3 select-none">
+          {/* Dumbbell Icon button (ONLY clicking this icon opens the pass) */}
+          <button
+            onClick={onOpenPass}
+            className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20 hover:scale-105 active:scale-95 transition-transform cursor-pointer"
+            title="View Gym Entry Barcode & Pass"
+            aria-label="View Gym Entry Barcode"
+          >
             <Dumbbell className="w-5 h-5 text-slate-950 stroke-[2.5]" />
-            <span className="absolute -top-1 -right-1 flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-slate-950"></span>
+          </button>
+
+          {/* Brand Name (Clicking this goes to Dashboard) */}
+          <div 
+            onClick={() => setActiveTab('dashboard')}
+            className="cursor-pointer group"
+          >
+            <span className="text-lg font-black tracking-tight bg-gradient-to-r from-white via-slate-200 to-emerald-400 bg-clip-text text-transparent group-hover:to-emerald-300 transition-colors">
+              GYM DAYZ
             </span>
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-lg font-black tracking-tight bg-gradient-to-r from-white via-slate-200 to-emerald-400 bg-clip-text text-transparent group-hover:to-emerald-300 transition-colors">
-                GYM DAYZ
-              </span>
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 group-hover:bg-emerald-500 group-hover:text-slate-950 transition-colors">
-                <Ticket className="w-2.5 h-2.5" />
-                <span>Pass</span>
-              </span>
-            </div>
-            {isConfigured && profile.name ? (
-              <span className="block text-[11px] font-medium text-slate-400 leading-none group-hover:text-slate-300">
-                {profile.name} • Tap for barcode
-              </span>
-            ) : (
+            {isConfigured && profile.name && (
               <span className="block text-[11px] font-medium text-slate-400 leading-none">
-                Tap for gym pass
+                {profile.name}
               </span>
             )}
           </div>

@@ -86,8 +86,8 @@ export default function App() {
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 pb-24 md:pb-12 space-y-6">
         {activeTab === 'dashboard' && (
           <div className="space-y-6 animate-in fade-in duration-200">
-            {/* Header with Name, Today's Date & Member Pass shortcut */}
-            <Header onOpenPass={() => setIsGymPassOpen(true)} />
+            {/* Header with Name & Today's Date */}
+            <Header />
 
             {/* Top Summary: Fees Paid & Current Subscription Day */}
             <SummaryCards />
