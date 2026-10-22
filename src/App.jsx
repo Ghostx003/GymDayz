@@ -1,9 +1,10 @@
-import React, { useState, Suspense, lazy } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { useGym } from './context/GymContext';
 import OnboardingSetup from './components/setup/OnboardingSetup';
 import Navbar from './components/common/Navbar';
 import TabBar from './components/common/TabBar';
 import Toast from './components/common/Toast';
+import GymPassModal from './components/common/GymPassModal';
 
 // Core Dashboard components (eager loaded for instant first paint)
 import Header from './components/dashboard/Header';
@@ -13,6 +14,9 @@ import AttendanceCounter from './components/dashboard/AttendanceCounter';
 import TodayActionCard from './components/dashboard/TodayActionCard';
 import FinancialCards from './components/dashboard/FinancialCards';
 import AttendanceCalendar from './components/calendar/AttendanceCalendar';
+import { encodeSyncPayload } from './sync/syncCodec';
+import { publishSyncPayload } from './sync/liveSyncRelay';
+import { fireWorkoutConfetti } from './utils/confetti';
 
 // Lazy loaded views to keep main bundle tiny
 const StatisticsView = lazy(() => import('./components/stats/StatisticsView'));
@@ -29,9 +33,34 @@ function ViewLoader() {
 }
 
 export default function App() {
-  const { isConfigured, toastMessage, hideToast } = useGym();
+  const { gymData, isConfigured, toastMessage, hideToast, showToast, daysGone } = useGym();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [isGymPassOpen, setIsGymPassOpen] = useState(false);
+
+  // Handle phone opening ?sync_room=... after scanning laptop QR
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const url = new URL(window.location.href);
+      const syncRoom = url.searchParams.get('sync_room');
+      if (syncRoom && gymData) {
+        const payload = encodeSyncPayload(gymData);
+        publishSyncPayload(syncRoom, payload).then(() => {
+          showToast(`🚀 Sent phone attendance to Laptop! (${daysGone} days attended)`, 'success');
+          fireWorkoutConfetti();
+        }).catch((err) => {
+          console.error('Auto sync error:', err);
+        });
+
+        // Clean up URL without reload
+        url.searchParams.delete('sync_room');
+        window.history.replaceState(null, '', url.pathname + (url.search ? url.search : '') + url.hash);
+      }
+    } catch {
+      // ignore
+    }
+  }, [gymData, daysGone, showToast]);
 
   // If new user / not configured, show onboarding
   if (!isConfigured) {
@@ -50,14 +79,15 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenSync={() => setIsSyncModalOpen(true)}
+        onOpenPass={() => setIsGymPassOpen(true)}
       />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 pb-24 md:pb-12 space-y-6">
         {activeTab === 'dashboard' && (
           <div className="space-y-6 animate-in fade-in duration-200">
-            {/* Header with Name & Today's Date */}
-            <Header />
+            {/* Header with Name, Today's Date & Member Pass shortcut */}
+            <Header onOpenPass={() => setIsGymPassOpen(true)} />
 
             {/* Top Summary: Fees Paid & Current Subscription Day */}
             <SummaryCards />
@@ -115,6 +145,12 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenSync={() => setIsSyncModalOpen(true)}
+      />
+
+      {/* Gym Pass Modal (Barcode & Full Card Carousel) */}
+      <GymPassModal
+        isOpen={isGymPassOpen}
+        onClose={() => setIsGymPassOpen(false)}
       />
 
       {/* Sync Modal (Lazy) */}

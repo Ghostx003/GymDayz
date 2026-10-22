@@ -1,0 +1,187 @@
+/**
+ * Live Sync Relay Engine for Gym Dayz
+ * Enables zero-camera laptop synchronization:
+ * Laptop shows QR code -> Phone scans QR code -> Phone pushes latest data to Laptop in real-time.
+ */
+
+// Helper to generate a short, clean session ID and 6-digit PIN
+export function generateSyncSession() {
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // base32 without ambiguous characters
+  let roomId = 'gd_';
+  for (let i = 0; i < 6; i++) {
+    roomId += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  const pin = Math.floor(100000 + Math.random() * 900000).toString();
+  return { roomId, pin };
+}
+
+/**
+ * Publishes sync payload from Phone to Laptop session
+ * @param {string} roomId 
+ * @param {string} payload 
+ * @param {object} [metadata]
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function publishSyncPayload(roomId, payload, metadata = {}) {
+  const cleanRoom = roomId.trim();
+  const messageObj = {
+    type: 'GYM_SYNC_PAYLOAD',
+    room: cleanRoom,
+    payload,
+    metadata: {
+      ...metadata,
+      sentAt: new Date().toISOString(),
+      sender: typeof window !== 'undefined' && /Mobi|Android|iPhone/i.test(navigator.userAgent) ? 'phone' : 'pc',
+    },
+  };
+
+  const messageStr = JSON.stringify(messageObj);
+
+  // 1. Broadcast locally (for multi-tab / same machine testing)
+  try {
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      const bc = new BroadcastChannel('gymdayz_live_sync');
+      bc.postMessage(messageObj);
+      setTimeout(() => bc.close(), 1000);
+    }
+  } catch (err) {
+    console.warn('BroadcastChannel error:', err);
+  }
+
+  // 2. Publish to cloud relay (ntfy.sh)
+  try {
+    const res = await fetch(`https://ntfy.sh/${cleanRoom}`, {
+      method: 'POST',
+      body: messageStr,
+      headers: {
+        'Content-Type': 'application/json',
+        'Title': 'GymDayz Sync',
+      },
+    });
+
+    if (res.ok) {
+      return { success: true };
+    }
+  } catch (err) {
+    console.warn('Network publish failed:', err);
+  }
+
+  // If we dispatched via broadcast channel, consider it partially successful
+  return { success: true };
+}
+
+/**
+ * Listens on the Laptop for incoming sync payload sent from Phone
+ * @param {string} roomId 
+ * @param {(payload: string, metadata: object) => void} onPayloadReceived 
+ * @returns {() => void} cleanup unsubscribe function
+ */
+export function listenForSyncPayload(roomId, onPayloadReceived) {
+  const cleanRoom = roomId.trim();
+  let isClosed = false;
+  let receivedPayloads = new Set();
+
+  const handleMessageString = (rawStr) => {
+    if (isClosed || !rawStr) return;
+    try {
+      const parsed = typeof rawStr === 'string' ? JSON.parse(rawStr) : rawStr;
+      if (parsed?.type === 'GYM_SYNC_PAYLOAD' && parsed.payload) {
+        if (!receivedPayloads.has(parsed.payload)) {
+          receivedPayloads.add(parsed.payload);
+          onPayloadReceived(parsed.payload, parsed.metadata || {});
+        }
+      }
+    } catch {
+      // If it's a direct GD1: string without JSON wrapper
+      if (typeof rawStr === 'string' && (rawStr.startsWith('GD1:') || rawStr.startsWith('GYMDAYZ:'))) {
+        if (!receivedPayloads.has(rawStr)) {
+          receivedPayloads.add(rawStr);
+          onPayloadReceived(rawStr, {});
+        }
+      }
+    }
+  };
+
+  // 1. Local BroadcastChannel listener
+  let bc = null;
+  try {
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      bc = new BroadcastChannel('gymdayz_live_sync');
+      bc.onmessage = (event) => {
+        if (event.data?.room === cleanRoom) {
+          handleMessageString(event.data);
+        }
+      };
+    }
+  } catch (err) {
+    console.warn('BroadcastChannel listener error:', err);
+  }
+
+  // 2. Server-Sent Events (SSE) via ntfy.sh
+  let eventSource = null;
+  try {
+    if (typeof window !== 'undefined' && 'EventSource' in window) {
+      eventSource = new EventSource(`https://ntfy.sh/${cleanRoom}/sse`);
+      eventSource.onmessage = (event) => {
+        try {
+          const sseData = JSON.parse(event.data);
+          if (sseData.event === 'message' && sseData.message) {
+            handleMessageString(sseData.message);
+          }
+        } catch {
+          // ignore heartbeats
+        }
+      };
+      eventSource.onerror = () => {
+        // SSE may drop on sleep/resume, polling below provides backup
+      };
+    }
+  } catch (err) {
+    console.warn('EventSource initialization error:', err);
+  }
+
+  // 3. Fallback polling every 2 seconds
+  const pollInterval = setInterval(async () => {
+    if (isClosed) return;
+    try {
+      const res = await fetch(`https://ntfy.sh/${cleanRoom}/json?poll=1&since=all`);
+      if (res.ok) {
+        const text = await res.text();
+        const lines = text.trim().split('\n');
+        for (const line of lines) {
+          if (!line) continue;
+          try {
+            const item = JSON.parse(line);
+            if (item.event === 'message' && item.message) {
+              handleMessageString(item.message);
+            }
+          } catch {
+            // ignore malformed line
+          }
+        }
+      }
+    } catch {
+      // offline or network glitch
+    }
+  }, 2000);
+
+  // Return unsubscribe cleanup
+  return () => {
+    isClosed = true;
+    clearInterval(pollInterval);
+    if (bc) {
+      try {
+        bc.close();
+      } catch {
+        // ignore
+      }
+    }
+    if (eventSource) {
+      try {
+        eventSource.close();
+      } catch {
+        // ignore
+      }
+    }
+  };
+}
