@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { Camera, AlertCircle, Zap } from 'lucide-react';
+import { Camera, AlertCircle } from 'lucide-react';
 
 export default function QrScannerModal({ onScanSuccess }) {
   const [cameraError, setCameraError] = useState('');
@@ -16,7 +16,7 @@ export default function QrScannerModal({ onScanSuccess }) {
         setCameraError('');
         const html5QrCode = new Html5Qrcode(containerId, {
           experimentalFeatures: {
-            useBarCodeDetectorIfSupported: true, // Native Android/Chrome hardware acceleration
+            useBarCodeDetectorIfSupported: true, // Native hardware acceleration
           },
           verbose: false,
         });
@@ -25,9 +25,11 @@ export default function QrScannerModal({ onScanSuccess }) {
         await html5QrCode.start(
           { facingMode: 'environment' },
           {
-            fps: 25, // High scanning frame rate for sub-second recognition
+            fps: 25,
             qrbox: (viewfinderWidth, viewfinderHeight) => {
-              const edge = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.85);
+              const minDim = Math.min(viewfinderWidth || 250, viewfinderHeight || 250);
+              // Guaranteed minimum size >= 60px to prevent html5-qrcode 50px exception
+              const edge = Math.max(60, Math.floor(minDim * 0.8));
               return { width: edge, height: edge };
             },
             aspectRatio: 1.0,
@@ -41,9 +43,7 @@ export default function QrScannerModal({ onScanSuccess }) {
               });
             }
           },
-          () => {
-            // Frame scanned
-          }
+          () => {}
         );
 
         if (isMounted) {
@@ -53,18 +53,21 @@ export default function QrScannerModal({ onScanSuccess }) {
         if (isMounted) {
           const errStr = err?.toString() || '';
           if (errStr.includes('NotAllowedError') || errStr.includes('Permission')) {
-            setCameraError('Camera permission denied. Please allow camera access in your browser settings, or use the "Paste Code" tab.');
+            setCameraError('Camera permission denied. Please allow camera access in browser settings.');
           } else {
-            setCameraError('Unable to access camera feed. You can use the "Paste Code" tab to sync manually.');
+            setCameraError('Unable to access camera feed.');
           }
         }
       }
     }
 
-    startScanner();
+    const timer = setTimeout(() => {
+      startScanner();
+    }, 60);
 
     return () => {
       isMounted = false;
+      clearTimeout(timer);
       if (scannerRef.current) {
         try {
           if (scannerRef.current.isScanning) {
@@ -98,11 +101,6 @@ export default function QrScannerModal({ onScanSuccess }) {
           )}
         </div>
       )}
-
-      <p className="text-center text-xs text-slate-400 flex items-center justify-center gap-1.5">
-        <Zap className="w-3.5 h-3.5 text-emerald-400" />
-        <span>Align QR code inside box — captures automatically in 1–2 seconds.</span>
-      </p>
     </div>
   );
 }
