@@ -15,7 +15,7 @@ import TodayActionCard from './components/dashboard/TodayActionCard';
 import FinancialCards from './components/dashboard/FinancialCards';
 import AttendanceCalendar from './components/calendar/AttendanceCalendar';
 import { encodeSyncPayload } from './sync/syncCodec';
-import { publishSyncPayload } from './sync/liveSyncRelay';
+import { publishSyncPayload, listenForSyncPayload } from './sync/liveSyncRelay';
 import { fireWorkoutConfetti } from './utils/confetti';
 
 // Lazy loaded views to keep main bundle tiny
@@ -33,7 +33,7 @@ function ViewLoader() {
 }
 
 export default function App() {
-  const { gymData, isConfigured, toastMessage, hideToast, showToast, daysGone } = useGym();
+  const { gymData, isConfigured, toastMessage, hideToast, showToast, daysGone, applySyncPayload } = useGym();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [isGymPassOpen, setIsGymPassOpen] = useState(false);
@@ -46,8 +46,17 @@ export default function App() {
       const syncRoom = url.searchParams.get('sync_room');
       if (syncRoom && gymData) {
         const payload = encodeSyncPayload(gymData);
-        publishSyncPayload(syncRoom, payload).then(() => {
-          showToast(`🚀 Sent phone attendance to Laptop! (${daysGone} days attended)`, 'success');
+
+        // Listen for laptop winning state if laptop was more recent
+        const unsub = listenForSyncPayload(syncRoom, (laptopWinningPayload) => {
+          applySyncPayload(laptopWinningPayload);
+          showToast('Synced! Laptop data was newer and applied to Phone.', 'success');
+          fireWorkoutConfetti();
+          unsub();
+        }, 'phone');
+
+        publishSyncPayload(syncRoom, payload, 'phone').then(() => {
+          showToast(`🚀 Synced with Laptop! (${daysGone} days attended)`, 'success');
           fireWorkoutConfetti();
         }).catch((err) => {
           console.error('Auto sync error:', err);
@@ -56,11 +65,13 @@ export default function App() {
         // Clean up URL without reload
         url.searchParams.delete('sync_room');
         window.history.replaceState(null, '', url.pathname + (url.search ? url.search : '') + url.hash);
+
+        setTimeout(() => unsub(), 4000);
       }
     } catch {
       // ignore
     }
-  }, [gymData, daysGone, showToast]);
+  }, [gymData, daysGone, showToast, applySyncPayload]);
 
   // If new user / not configured, show onboarding
   if (!isConfigured) {

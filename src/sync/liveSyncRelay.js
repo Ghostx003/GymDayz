@@ -1,38 +1,34 @@
 /**
  * Live Sync Relay Engine for Gym Dayz
  * Enables zero-camera laptop synchronization:
- * Laptop shows QR code -> Phone scans QR code -> Phone pushes latest data to Laptop in real-time.
+ * Laptop shows QR code -> Phone scans QR code -> Bi-directional sync resolves latest state.
  */
 
-// Helper to generate a short, clean session ID and 6-digit PIN
+// Helper to generate a short, clean session ID
 export function generateSyncSession() {
   const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // base32 without ambiguous characters
   let roomId = 'gd_';
   for (let i = 0; i < 6; i++) {
     roomId += chars.charAt(Math.floor(Math.random() * chars.length));
   }
-  const pin = Math.floor(100000 + Math.random() * 900000).toString();
-  return { roomId, pin };
+  return { roomId };
 }
 
 /**
- * Publishes sync payload from Phone to Laptop session
+ * Publishes sync payload
  * @param {string} roomId 
  * @param {string} payload 
- * @param {object} [metadata]
+ * @param {string} sender 'phone' | 'laptop'
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function publishSyncPayload(roomId, payload, metadata = {}) {
+export async function publishSyncPayload(roomId, payload, sender = 'device') {
   const cleanRoom = roomId.trim();
   const messageObj = {
     type: 'GYM_SYNC_PAYLOAD',
     room: cleanRoom,
     payload,
-    metadata: {
-      ...metadata,
-      sentAt: new Date().toISOString(),
-      sender: typeof window !== 'undefined' && /Mobi|Android|iPhone/i.test(navigator.userAgent) ? 'phone' : 'pc',
-    },
+    sender,
+    sentAt: new Date().toISOString(),
   };
 
   const messageStr = JSON.stringify(messageObj);
@@ -66,17 +62,17 @@ export async function publishSyncPayload(roomId, payload, metadata = {}) {
     console.warn('Network publish failed:', err);
   }
 
-  // If we dispatched via broadcast channel, consider it partially successful
   return { success: true };
 }
 
 /**
- * Listens on the Laptop for incoming sync payload sent from Phone
+ * Listens for incoming sync payload
  * @param {string} roomId 
  * @param {(payload: string, metadata: object) => void} onPayloadReceived 
+ * @param {string} [ignoreSender] if provided, ignores messages from this sender
  * @returns {() => void} cleanup unsubscribe function
  */
-export function listenForSyncPayload(roomId, onPayloadReceived) {
+export function listenForSyncPayload(roomId, onPayloadReceived, ignoreSender = '') {
   const cleanRoom = roomId.trim();
   let isClosed = false;
   let receivedPayloads = new Set();
@@ -86,9 +82,12 @@ export function listenForSyncPayload(roomId, onPayloadReceived) {
     try {
       const parsed = typeof rawStr === 'string' ? JSON.parse(rawStr) : rawStr;
       if (parsed?.type === 'GYM_SYNC_PAYLOAD' && parsed.payload) {
+        if (ignoreSender && parsed.sender === ignoreSender) {
+          return; // Ignore own message
+        }
         if (!receivedPayloads.has(parsed.payload)) {
           receivedPayloads.add(parsed.payload);
-          onPayloadReceived(parsed.payload, parsed.metadata || {});
+          onPayloadReceived(parsed.payload, { sender: parsed.sender });
         }
       }
     } catch {
@@ -132,15 +131,12 @@ export function listenForSyncPayload(roomId, onPayloadReceived) {
           // ignore heartbeats
         }
       };
-      eventSource.onerror = () => {
-        // SSE may drop on sleep/resume, polling below provides backup
-      };
     }
   } catch (err) {
     console.warn('EventSource initialization error:', err);
   }
 
-  // 3. Fallback polling every 2 seconds
+  // 3. Fallback polling every 1.5 seconds
   const pollInterval = setInterval(async () => {
     if (isClosed) return;
     try {
@@ -156,16 +152,15 @@ export function listenForSyncPayload(roomId, onPayloadReceived) {
               handleMessageString(item.message);
             }
           } catch {
-            // ignore malformed line
+            // ignore
           }
         }
       }
     } catch {
       // offline or network glitch
     }
-  }, 2000);
+  }, 1500);
 
-  // Return unsubscribe cleanup
   return () => {
     isClosed = true;
     clearInterval(pollInterval);
