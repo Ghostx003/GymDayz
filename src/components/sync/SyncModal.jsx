@@ -5,8 +5,7 @@ import {
   Smartphone, 
   Radio, 
   CheckCircle2, 
-  Zap,
-  ShieldCheck
+  Zap
 } from 'lucide-react';
 import Modal from '../common/Modal';
 import QrScannerModal from './QrScannerModal';
@@ -21,7 +20,7 @@ export default function SyncModal({ isOpen, onClose }) {
 
   const isMobile = typeof window !== 'undefined' && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
-  // Strictly only 2 tabs: 'laptop' or 'phone'
+  // Strictly 2 tabs: 'laptop' or 'phone'
   const [activeTab, setActiveTab] = useState(isMobile ? 'phone' : 'laptop');
 
   // Live session state for Laptop receiving data
@@ -38,7 +37,6 @@ export default function SyncModal({ isOpen, onClose }) {
     setSyncStatus('listening');
     setSyncResultNote('');
 
-    // Listen on laptop for incoming phone payload
     const unsubscribe = listenForSyncPayload(newSession.roomId, async (incomingPayload) => {
       setSyncStatus('syncing');
       try {
@@ -49,14 +47,14 @@ export default function SyncModal({ isOpen, onClose }) {
         const resolution = resolveSyncConflict(currentLaptopData, phoneData);
 
         if (resolution.winner === 'incoming') {
-          // Phone data is more recent! Laptop gets phone data
+          // Phone data is more recent
           applySyncPayload(incomingPayload);
-          setSyncResultNote('Phone data was more recent. Laptop updated successfully!');
+          setSyncResultNote('Laptop updated with phone attendance.');
         } else {
-          // Laptop data is more recent! Send laptop's data back to phone
+          // Laptop data is more recent
           const winningLaptopPayload = encodeSyncPayload(currentLaptopData);
           await publishSyncPayload(newSession.roomId, winningLaptopPayload, 'laptop');
-          setSyncResultNote('Laptop data was more recent. Phone updated successfully!');
+          setSyncResultNote('Phone updated with laptop attendance.');
         }
 
         setSyncStatus('success');
@@ -97,7 +95,7 @@ export default function SyncModal({ isOpen, onClose }) {
 
     if (matchedRoom) {
       if (!gymData) {
-        showToast('No local gym data to sync from this phone', 'error');
+        showToast('No gym data found', 'error');
         return;
       }
 
@@ -107,27 +105,26 @@ export default function SyncModal({ isOpen, onClose }) {
         // Listen for 3 seconds in case laptop data is newer
         const unsub = listenForSyncPayload(matchedRoom, (laptopWinningPayload) => {
           applySyncPayload(laptopWinningPayload);
-          showToast('Synced! Laptop data was newer and applied to Phone.', 'success');
+          showToast('Synced with Laptop', 'success');
           fireWorkoutConfetti();
           unsub();
         }, 'phone');
 
         // Push phone data to laptop
         await publishSyncPayload(matchedRoom, phonePayload, 'phone');
-        showToast('🚀 Synced with Laptop! Latest attendance applied.', 'success');
+        showToast('Synced with Laptop', 'success');
         fireWorkoutConfetti();
 
         setTimeout(() => {
           unsub();
           onClose();
-        }, 1500);
+        }, 1200);
       } catch {
         showToast('Failed to connect to laptop sync session', 'error');
       }
       return;
     }
 
-    // Direct payload fallback
     const res = applySyncPayload(decodedText);
     if (res.success) {
       onClose();
@@ -168,10 +165,9 @@ export default function SyncModal({ isOpen, onClose }) {
           </button>
         </div>
 
-        {/* Option 1: LAPTOP SYNC (Laptop displays QR, zero camera needed) */}
+        {/* Option 1: LAPTOP SYNC */}
         {activeTab === 'laptop' && (
           <div className="flex flex-col items-center text-center space-y-4 pt-1">
-            {/* Scannable QR Container */}
             <div className="relative p-3 sm:p-4 bg-white rounded-3xl shadow-2xl flex items-center justify-center border-4 border-emerald-500/40">
               {receiverQrUrl ? (
                 <QRCodeSVG
@@ -182,15 +178,14 @@ export default function SyncModal({ isOpen, onClose }) {
                 />
               ) : (
                 <div className="w-[240px] h-[240px] flex items-center justify-center text-xs text-slate-400">
-                  Generating sync session...
+                  Generating session...
                 </div>
               )}
 
-              {/* Success Overlay */}
               {syncStatus === 'success' && (
                 <div className="absolute inset-0 bg-slate-950/95 rounded-2xl flex flex-col items-center justify-center p-4 animate-in zoom-in-90 duration-200">
                   <CheckCircle2 className="w-16 h-16 text-emerald-400 mb-2 animate-bounce" />
-                  <span className="text-lg font-black text-white">Boom, Synced!</span>
+                  <span className="text-lg font-black text-white">Synced!</span>
                   <span className="text-xs text-emerald-400 mt-1 font-medium text-center">
                     {syncResultNote}
                   </span>
@@ -204,49 +199,29 @@ export default function SyncModal({ isOpen, onClose }) {
               )}
             </div>
 
-            {/* Radar status */}
-            <div className="space-y-1.5 w-full">
+            <div className="space-y-1 w-full">
               {syncStatus === 'listening' && (
                 <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs font-bold animate-pulse">
                   <Radio className="w-3.5 h-3.5 animate-spin" />
-                  <span>Waiting for phone scan...</span>
+                  <span>Waiting for scan...</span>
                 </div>
               )}
               {syncStatus === 'syncing' && (
                 <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 text-xs font-bold">
                   <Zap className="w-3.5 h-3.5 animate-bounce" />
-                  <span>Phone detected! Synchronizing latest data...</span>
+                  <span>Syncing...</span>
                 </div>
               )}
-
-              <p className="text-xs text-slate-200 font-semibold pt-1">
-                Scan this QR code with your <strong>Phone</strong>
-              </p>
-              <p className="text-[11px] text-slate-400 leading-relaxed px-4">
-                Latest attendance is applied automatically to both sides.
-              </p>
             </div>
           </div>
         )}
 
-        {/* Option 2: PHONE SYNC (Use Phone camera to scan laptop screen) */}
+        {/* Option 2: PHONE SYNC */}
         {activeTab === 'phone' && (
           <div className="space-y-3">
-            <div className="p-3 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 text-xs text-emerald-300 flex items-center gap-2.5">
-              <Smartphone className="w-5 h-5 text-emerald-400 shrink-0" />
-              <span>
-                Point this phone's camera at the <strong>Laptop Sync QR</strong> to instantly sync both devices.
-              </span>
-            </div>
             <QrScannerModal onScanSuccess={handlePhoneScanSuccess} />
           </div>
         )}
-
-        {/* Auto resolution rule note */}
-        <div className="p-2.5 rounded-2xl bg-slate-900/80 border border-slate-800 text-[11px] text-slate-400 flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>Bi-directional sync: <strong>Most recent attendance wins</strong> on both sides.</span>
-        </div>
       </div>
     </Modal>
   );
